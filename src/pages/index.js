@@ -1,0 +1,50 @@
+import React, { useState, useEffect } from "react";
+import Typewriter from "typewriter-effect";
+
+const index = () => {
+
+  const RedirectToGoogle = async () => {
+    const authURL = "http://localhost:5000/auth/google";
+    window.location.href = authURL;
+  };
+
+  return (
+    <div
+      style={{
+        background: `linear-gradient(to bottom, #42275a, #734b6d)`,
+        height: "100vh",
+        backgroundPosition: "center",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          textAlign: "center",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "white",
+          height: "100vh",
+        }}
+      >
+        <h2>
+          <Typewriter
+            onInit={(typewriter) => {
+              typewriter
+                .typeString("Hello, Please login your account with Google")
+                .pauseFor(1500)
+                .typeString("!!!!")
+                .pauseFor(2500)
+                .start();
+            }}
+          />
+        </h2>
+        <button onClick={RedirectToGoogle}> Google Login </button>
+      </div>
+    </div>
+  );
+};
+
+export default index;
