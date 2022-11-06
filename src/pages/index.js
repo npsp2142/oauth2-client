@@ -2,22 +2,13 @@ import React, { useState, useEffect } from "react";
 import Typewriter from "typewriter-effect";
 
 const index = () => {
-
-  const RedirectToGoogle = async () => {
+  const redirectToGoogle = async () => {
     const authURL = "http://localhost:5000/auth/google";
     window.location.href = authURL;
   };
 
   return (
-    <div
-      style={{
-        background: `linear-gradient(to bottom, #42275a, #734b6d)`,
-        height: "100vh",
-        backgroundPosition: "center",
-        backgroundSize: "cover",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <div className="background">
       <div
         style={{
           display: "flex",
@@ -41,7 +32,7 @@ const index = () => {
             }}
           />
         </h2>
-        <button onClick={RedirectToGoogle}> Google Login </button>
+        <button onClick={redirectToGoogle}> Google Login </button>
       </div>
     </div>
   );

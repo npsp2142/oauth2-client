@@ -8,23 +8,22 @@ import {
 } from "react-router-dom";
 
 //Pages
-import MainPage from "./pages/index";
+import MainPage from "./pages";
 import NotFound from "./pages/404";
 import Success from "./pages/success";
 import Failure from "./pages/failure";
-class App extends Component {
-  render() {
-    return (
-      <Router>
-        <Routes>
-          <Route exact path="/" element={<MainPage/>} />
-          <Route exact path="/auth/google/success" element={<Success/>} />
-          <Route exact path="/auth.google/failure" element={<Failure/>} />
-          <Route path="*" element={<NotFound/>} />
-        </Routes>
-      </Router>
-    );
-  }
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route exact path="/" element={<MainPage />} />
+        <Route exact path="/auth/google/success" element={<Success />} />
+        <Route exact path="/auth.google/failure" element={<Failure />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Router>
+  );
 }
 
 export default App;
