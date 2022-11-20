@@ -13,6 +13,7 @@ import NotFound from "./pages/404";
 import Success from "./pages/success";
 import Failure from "./pages/failure";
 import RegisterUser from "./pages/RegisterUser";
+import Login from "./pages/Login";
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route exact path="/success" element={<Success />} />
         <Route exact path="/failure" element={<Failure />} />
         <Route exact path="/register" element={<RegisterUser />} />
+        <Route exact path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

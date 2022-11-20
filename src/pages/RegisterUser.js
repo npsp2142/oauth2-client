@@ -1,18 +1,39 @@
+import { Controller, useForm } from "react-hook-form";
+import { TextField } from "@mui/material";
+
 const RegisterUser = () => {
-  const submitRegister = async () => {
-    const loginObject = { username: "jacky", password: "jacky" };
+  const submitRegister = async (data) => {
+    const newUser = { username: data.username, password: data.password };
     fetch("http://localhost:5000/register", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(loginObject),
+      body: JSON.stringify(newUser),
     }).then();
-    // window.location.href = authURL;
   };
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+    control,
+  } = useForm();
+
   return (
-    <div>
-      <form
+    <div className="background">
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          textAlign: "center",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "white",
+          height: "100vh",
+        }}
+      >
+        {/* <form
         onSubmit={(e) => {
           e.preventDefault();
           submitRegister();
@@ -25,7 +46,67 @@ const RegisterUser = () => {
         <button type="submit" onClick={() => {}}>
           Register
         </button>
-      </form>
+      </form> */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(submitRegister)();
+          }}
+        >
+          <div>
+            <Controller
+              control={control}
+              name="username"
+              render={({
+                field: { onChange, onBlur, value, name, ref },
+                fieldState: { isTouched, isDirty, error },
+              }) => (
+                <TextField
+                  onBlur={onBlur} // notify when input is touched
+                  onChange={onChange} // send value to hook form
+                  checked={value}
+                  inputRef={ref}
+                  label="username"
+                  variant="filled"
+                  style={{
+                    color: "white",
+                    backgroundColor: "#fcfcfb",
+                  }}
+                />
+              )}
+            />
+          </div>
+          <div>
+            <Controller
+              control={control}
+              name="password"
+              render={({
+                field: { onChange, onBlur, value, name, ref },
+                fieldState: { isTouched, isDirty, error },
+              }) => (
+                <TextField
+                  onBlur={onBlur} // notify when input is touched
+                  onChange={onChange} // send value to hook form
+                  checked={value}
+                  inputRef={ref}
+                  label="password"
+                  type="password"
+                  variant="filled"
+                  style={{
+                    color: "white",
+                    backgroundColor: "#fcfcfb",
+                  }}
+                />
+              )}
+            />
+          </div>
+
+          <button type="submit" onClick={() => {}}>
+            {" "}
+            Register{" "}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
