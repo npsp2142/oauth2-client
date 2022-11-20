@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { renderIntoDocument } from "react-dom/test-utils";
+import { useNavigate } from "react-router-dom";
 import { fetchUser, logoutUser } from "../component/user";
 
 const Success = () => {
   const [profile, setProfile] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchUser().then((response) => {
@@ -27,7 +30,11 @@ const Success = () => {
         >
           <h2>Welcome, {profile.displayName}</h2>
           <h2>{profile.email}</h2>
-          <button onClick={logoutUser}>Logout</button>
+          <button onClick={()=>{
+            logoutUser().then(({redirect})=>{
+              navigate(redirect);
+            })
+          }}>Logout</button>
         </div>
       </div>
     );

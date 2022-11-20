@@ -12,14 +12,16 @@ import MainPage from "./pages";
 import NotFound from "./pages/404";
 import Success from "./pages/success";
 import Failure from "./pages/failure";
+import RegisterUser from "./pages/RegisterUser";
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route exact path="/" element={<MainPage />} />
-        <Route exact path="/auth/google/success" element={<Success />} />
-        <Route exact path="/auth.google/failure" element={<Failure />} />
+        <Route exact path="/success" element={<Success />} />
+        <Route exact path="/failure" element={<Failure />} />
+        <Route exact path="/register" element={<RegisterUser />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
