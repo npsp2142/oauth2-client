@@ -8,6 +8,11 @@ const Index = () => {
     window.location.href = authURL;
   };
 
+  const redirectToAuthServer = async () => {
+    const authURL = "http://localhost:5000/auth/securityproject";
+    window.location.href = authURL;
+  };
+
   const navigate = useNavigate();
 
   return (
@@ -36,6 +41,7 @@ const Index = () => {
           />
         </h2>
         <button onClick={redirectToGoogle}> Google Login </button>
+        <button onClick={redirectToAuthServer}> Auth Login </button>
         <button
           onClick={() => {
             navigate("/login");
