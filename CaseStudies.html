@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Case studies of Keycloak&comma; node-oauth in implementing Authorization Code Flow</title>
+        <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+        
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+        
+    </head>
+    <body class="vscode-body vscode-light">
+        <h1 id="case-studies-of-keycloak-node-oauth-in-implementing-authorization-code-flow">Case studies of Keycloak, node-oauth in implementing Authorization Code Flow</h1>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#case-studies-of-keycloak-node-oauth-in-implementing-authorization-code-flow">Case studies of Keycloak, node-oauth in implementing Authorization Code Flow</a>
+<ul>
+<li><a href="#contents">Contents</a></li>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#redirecting-to-authorization-endpoint">Redirecting to Authorization Endpoint</a></li>
+<li><a href="#authenticating-user-redirecting-with-authorization-code">Authenticating user, Redirecting with authorization code</a></li>
+<li><a href="#requesting-access-token">Requesting Access Token</a></li>
+<li><a href="#redirecting-with-access-token">Redirecting with Access Token</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>This case studies will focus on reviewing how Keycloak and node-oauth implement Authorization Code Flow in OAuth Protocal, which Keycloak is an authorization server and node-oauth is the user-agent. Each sections refer a step in protocol flow, which are redirecting to authorization endpoint, authenticating user, redirecting with authorization code, requesting an access token, redirecting with access token.</p>
+<h2 id="redirecting-to-authorization-endpoint">Redirecting to Authorization Endpoint</h2>
+<p>In the first step of authorization code flow, the third party application should create authorization request, specifies the <code>response_type</code>, <code>redirect_uri</code> and <code>client_id</code>.</p>
+<p>We have used <code>node-oauth</code> javascript library for creating the request. The following code snippets are how the library creates the request.</p>
+<pre><code class="language-javascript"><span class="hljs-keyword">var</span> params = <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">authorizationParams</span>(options);
+params.<span class="hljs-property">response_type</span> = <span class="hljs-string">&quot;code&quot;</span>;
+</code></pre>
+<pre><code class="language-javascript"><span class="hljs-keyword">var</span> parsed = url.<span class="hljs-title function_">parse</span>(self.<span class="hljs-property">_oauth2</span>.<span class="hljs-property">_authorizeUrl</span>, <span class="hljs-literal">true</span>);
+utils.<span class="hljs-title function_">merge</span>(parsed.<span class="hljs-property">query</span>, params);
+parsed.<span class="hljs-property">query</span>[<span class="hljs-string">&quot;client_id&quot;</span>] = self.<span class="hljs-property">_oauth2</span>.<span class="hljs-property">_clientId</span>;
+<span class="hljs-keyword">delete</span> parsed.<span class="hljs-property">search</span>;
+<span class="hljs-keyword">var</span> location = url.<span class="hljs-title function_">format</span>(parsed);
+self.<span class="hljs-title function_">redirect</span>(location);
+</code></pre>
+<p>The following is a sample url created by the library, and its prettier version.</p>
+<pre><code>http://localhost:8081/realms/master/protocol/openid-connect/auth?response_type=code&amp;redirect_uri=http://localhost:5000/auth/securityproject/callback&amp;client_id=comp-internet-sec
+</code></pre>
+<pre><code>http://localhost:8081/realms/master/protocol/openid-connect/auth
+
+response_type = code
+redirect_uri  = http://localhost:5000/auth/securityproject/callback
+client_id     = comp-internet-sec
+
+</code></pre>
+<p>Reference: <a href="https://github.com/ciaranj/node-oauth">node-oauth</a></p>
+<h2 id="authenticating-user-redirecting-with-authorization-code">Authenticating user, Redirecting with authorization code</h2>
+<p>Authentication server are responsible create the authorization code, and send to the third-party application. In Keycloak, the server creates an <code>GET</code> endpoint <code>/auth</code> to handle the request. The method <code>process()</code> class <code>AuthorizationEndpoint</code> is responsible to make this response. It first validates the request, and return errors if fails. If the checking is success, it creates an authentication session and build the authorization code response.</p>
+<p>Before building the code response, it will check whether the user authenicates or not via the method <code>authenticate()</code> in class <code>AuthenticationProcessor</code>. It will retrieve the user intended authentication from database, calling the method <code>authenticate()</code> from interface <code>Authenticator</code> for authentication. If the authentication flow is successful, it updates the database to create authenticated user, followed by calling <code>processor.finishAuthentication()</code> for logging, refreshing cookies and finally start building the code response via method <code>authenticated()</code> in interface <code>LoginProtocal</code>. For OAuth2 Login, it use <code>OIDCLoginProtocol</code> that implements <code>LoginProtocol</code>, creating the <code>302</code> response that contains an URL with the persisted code and session state.</p>
+<p>The following code segment shows the code that generates the authorization code, which Keycloak use random UUID for implementation.</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">code</span> <span class="hljs-operator">=</span> <span class="hljs-literal">null</span>;
+<span class="hljs-keyword">if</span> (responseType.hasResponseType(OIDCResponseType.CODE)) {
+    <span class="hljs-type">OAuth2Code</span> <span class="hljs-variable">codeData</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">OAuth2Code</span>(UUID.randomUUID().toString(),
+            Time.currentTime() + userSession.getRealm().getAccessCodeLifespan(),
+            nonce,
+            authSession.getClientNote(OAuth2Constants.SCOPE),
+            authSession.getClientNote(OIDCLoginProtocol.REDIRECT_URI_PARAM),
+            authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM),
+            authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM));
+
+    code = OAuth2CodeParser.persistCode(session, clientSession, codeData);
+    redirectUri.addParam(OAuth2Constants.CODE, code);
+}
+</code></pre>
+<p>The following image capture the redirected response containing the authorization code.</p>
+<p><img src="file:///d:\projects\oauth2-client\images\AuthorizationCodeResponse.png" alt="Receive authorization code"></p>
+<h2 id="requesting-access-token">Requesting Access Token</h2>
+<p>After the user-agent receives the authorization code, it request authorization server again to get the access token. In <code>node-oauth</code>, function <code>getOAuthAccessToken()</code> can create the access token request. The created request attachs the authorization code to query string and
+other required information such as <code>grant_type</code>, <code>redirect_uri</code>, <code>client_id</code>, and <code>client_secret</code>.</p>
+<p>The following code snippet show some of the related code snippets for creating the access token request in function <code>getOAuthAccessToken()</code>.</p>
+<pre><code class="language-javascript">  params[<span class="hljs-string">&quot;client_id&quot;</span>] = <span class="hljs-variable language_">this</span>.<span class="hljs-property">_clientId</span>;
+  params[<span class="hljs-string">&quot;client_secret&quot;</span>] = <span class="hljs-variable language_">this</span>.<span class="hljs-property">_clientSecret</span>;
+  <span class="hljs-keyword">var</span> codeParam =
+    params.<span class="hljs-property">grant_type</span> === <span class="hljs-string">&quot;refresh_token&quot;</span> ? <span class="hljs-string">&quot;refresh_token&quot;</span> : <span class="hljs-string">&quot;code&quot;</span>;
+  params[codeParam] = code;
+
+  <span class="hljs-keyword">var</span> post_data = querystring.<span class="hljs-title function_">stringify</span>(params);
+  <span class="hljs-keyword">var</span> post_headers = {
+    <span class="hljs-string">&quot;Content-Type&quot;</span>: <span class="hljs-string">&quot;application/x-www-form-urlencoded&quot;</span>,
+  };
+
+  <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">_request</span>(
+    <span class="hljs-string">&quot;POST&quot;</span>,
+    <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">_getAccessTokenUrl</span>(),
+    post_headers,
+    post_data,
+    <span class="hljs-literal">null</span>,
+    <span class="hljs-keyword">function</span> (<span class="hljs-params">error, data, response</span>) {
+      <span class="hljs-keyword">if</span> (error) <span class="hljs-title function_">callback</span>(error);
+      <span class="hljs-keyword">else</span> {
+        <span class="hljs-keyword">var</span> results;
+        <span class="hljs-keyword">try</span> {
+          results = <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(data);
+        } <span class="hljs-keyword">catch</span> (e) {
+          results = querystring.<span class="hljs-title function_">parse</span>(data);
+        }
+        <span class="hljs-keyword">var</span> access_token = results[<span class="hljs-string">&quot;access_token&quot;</span>];
+        <span class="hljs-keyword">var</span> refresh_token = results[<span class="hljs-string">&quot;refresh_token&quot;</span>];
+        <span class="hljs-keyword">delete</span> results[<span class="hljs-string">&quot;refresh_token&quot;</span>];
+        <span class="hljs-title function_">callback</span>(<span class="hljs-literal">null</span>, access_token, refresh_token, results);
+      }
+    }
+  );
+};
+</code></pre>
+<p>The following is the sample post body of the access token request, and the prettier version.</p>
+<pre><code>grant_type=authorization_code&amp;redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fauth%2Fsecurityproject%2Fcallback&amp;client_id=comp-internet-sec&amp;client_secret=bdeOQGB3n6sQMPPbl0pnQEZUgRNsCDFf&amp;code=16f17672-8530-41e3-af41-c3c1eb635c82.961bd503-9518-4e89-92aa-da134383f681.74bc1dd2-b5db-4b7d-a5de-044b99f0a5c7
+</code></pre>
+<pre><code>grant_type    = authorization_code
+redirect_uri  = http://localhost:5000/auth/securityproject/callback
+client_id     = comp-internet-sec
+client_secret = bdeOQGB3n6sQMPPbl0pnQEZUgRNsCDFf
+code          = 16f17672-8530-41e3-af41-c3c1eb635c82.961bd503-9518-4e89-92aa-da134383f681.74bc1dd2-b5db-4b7d-a5de-044b99f0a5c7
+</code></pre>
+<h2 id="redirecting-with-access-token">Redirecting with Access Token</h2>
+<p>Authorization Server should handle the access token token request. <code>Keycloak</code> creates a <code>POST</code> endpoint <code>/token</code> in class <code>TokenEndPoint</code>. It detects the grant type, and it executes <code>codeToToken()</code> method for handling request of authorization code grant type. The <code>codeToToken()</code> may first validate the content in the request such as <code>code</code> and <code>user_session</code>. It the validation is successful, it updates the user session, and invoke the method <code>createClientAccessToken()</code> that creates the token response. The method <code>encode()</code> in class <code>DefaultTokenManager</code> build the jwt token.</p>
+<pre><code class="language-java">    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> String <span class="hljs-title function_">encode</span><span class="hljs-params">(Token token)</span> {
+        <span class="hljs-type">String</span> <span class="hljs-variable">signatureAlgorithm</span> <span class="hljs-operator">=</span> signatureAlgorithm(token.getCategory());
+
+        <span class="hljs-type">SignatureProvider</span> <span class="hljs-variable">signatureProvider</span> <span class="hljs-operator">=</span> session.getProvider(SignatureProvider.class, signatureAlgorithm);
+        <span class="hljs-type">SignatureSignerContext</span> <span class="hljs-variable">signer</span> <span class="hljs-operator">=</span> signatureProvider.signer();
+
+        <span class="hljs-type">String</span> <span class="hljs-variable">encodedToken</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">JWSBuilder</span>().type(<span class="hljs-string">&quot;JWT&quot;</span>).jsonContent(token).sign(signer);
+        <span class="hljs-keyword">return</span> encodedToken;
+    }
+</code></pre>
+<p>The method <code>sign()</code> starts build the jwt token.</p>
+<pre><code class="language-java"><span class="hljs-keyword">public</span> String <span class="hljs-title function_">sign</span><span class="hljs-params">(SignatureSignerContext signer)</span> {
+    kid = signer.getKid();
+
+    <span class="hljs-type">StringBuilder</span> <span class="hljs-variable">buffer</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">StringBuilder</span>();
+    <span class="hljs-type">byte</span>[] data = marshalContent();
+    encode(signer.getAlgorithm(), data, buffer);
+    <span class="hljs-type">byte</span>[] signature = <span class="hljs-literal">null</span>;
+    <span class="hljs-keyword">try</span> {
+        signature = signer.sign(buffer.toString().getBytes(StandardCharsets.UTF_8));
+    } <span class="hljs-keyword">catch</span> (Exception e) {
+        <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">RuntimeException</span>(e);
+    }
+    <span class="hljs-keyword">return</span> encodeAll(buffer, signature);
+}
+</code></pre>
+<p>From the building process of <code>jwt</code>, it first encode the jwt JOSE Header and claims set using base64,</p>
+<pre><code class="language-java"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">encode</span><span class="hljs-params">(String sigAlgName, <span class="hljs-type">byte</span>[] data, StringBuilder encoding)</span> {
+    encoding.append(encodeHeader(sigAlgName));
+    encoding.append(<span class="hljs-string">&#x27;.&#x27;</span>);
+    encoding.append(Base64Url.encode(data));
+}
+</code></pre>
+<p>Followed by signing the encoded string using Message Authentication Code (MAC) in the method <code>sign()</code> for verifying the encode string. in the class <code>MacSignatureSignerContext</code>. The variable <code>key</code> can specifies the signing algorithm such as RS256 and HS256 and its secret key.</p>
+<pre><code class="language-java"><span class="hljs-meta">@Override</span>
+<span class="hljs-keyword">public</span> <span class="hljs-type">byte</span>[] sign(<span class="hljs-type">byte</span>[] data) <span class="hljs-keyword">throws</span> SignatureException {
+    <span class="hljs-keyword">try</span> {
+        <span class="hljs-type">Mac</span> <span class="hljs-variable">mac</span> <span class="hljs-operator">=</span> Mac.getInstance(JavaAlgorithm.getJavaAlgorithm(key.getAlgorithmOrDefault()));
+        mac.init(key.getSecretKey());
+        mac.update(data);
+        <span class="hljs-keyword">return</span> mac.doFinal();
+    } <span class="hljs-keyword">catch</span> (Exception e) {
+        <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">SignatureException</span>(<span class="hljs-string">&quot;Signing failed&quot;</span>, e);
+    }
+}
+</code></pre>
+<p>The following is the example of the created access token signed with RS256. It can be separated into three parts by the <code>.</code> character, which refers to the JOSE header, claims set, and the signature.</p>
+<pre><code>eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJvVnFpV2ZDZzllTm5ubVM1LUhTMXduTWhkemo2OVpieTZXTW1mQ0VPQy1NIn0.eyJleHAiOjE2NzAzNDYxMjgsImlhdCI6MTY3MDM0NjA2OCwiYXV0aF90aW1lIjoxNjcwMzQ1NDYwLCJqdGkiOiJjMjhmMzI1Yy1iNmFmLTQ0NDEtOTcxMi1lNDQ5NmI2Mjk3YjIiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODEvcmVhbG1zL21hc3RlciIsImF1ZCI6WyJtYXN0ZXItcmVhbG0iLCJhY2NvdW50Il0sInN1YiI6IjYzYzFhMTQzLTY1NGQtNGQwMC1iZjRmLWUwMzUwODk4MjI0OCIsInR5cCI6IkJlYXJlciIsImF6cCI6ImNvbXAtaW50ZXJuZXQtc2VjIiwic2Vzc2lvbl9zdGF0ZSI6Ijk2MWJkNTAzLTk1MTgtNGU4OS05MmFhLWRhMTM0MzgzZjY4MSIsImFjciI6IjAiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsiY3JlYXRlLXJlYWxtIiwiZGVmYXVsdC1yb2xlcy1tYXN0ZXIiLCJvZmZsaW5lX2FjY2VzcyIsImFkbWluIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJtYXN0ZXItcmVhbG0iOnsicm9sZXMiOlsidmlldy1yZWFsbSIsInZpZXctaWRlbnRpdHktcHJvdmlkZXJzIiwibWFuYWdlLWlkZW50aXR5LXByb3ZpZGVycyIsImltcGVyc29uYXRpb24iLCJjcmVhdGUtY2xpZW50IiwibWFuYWdlLXVzZXJzIiwicXVlcnktcmVhbG1zIiwidmlldy1hdXRob3JpemF0aW9uIiwicXVlcnktY2xpZW50cyIsInF1ZXJ5LXVzZXJzIiwibWFuYWdlLWV2ZW50cyIsIm1hbmFnZS1yZWFsbSIsInZpZXctZXZlbnRzIiwidmlldy11c2VycyIsInZpZXctY2xpZW50cyIsIm1hbmFnZS1hdXRob3JpemF0aW9uIiwibWFuYWdlLWNsaWVudHMiLCJxdWVyeS1ncm91cHMiXX0sImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsInNpZCI6Ijk2MWJkNTAzLTk1MTgtNGU4OS05MmFhLWRhMTM0MzgzZjY4MSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwicHJlZmVycmVkX3VzZXJuYW1lIjoiYWRtaW4ifQ.S-TwkLGhI5lAJVphW5yctXFYZ1S2dL0kOlYIQjymFLfm86wsFhxnPQrj7ELp5zKAzVSxJZ0HE4oK8hhxSLl9ssBQ8w44JwRa3t4tkDjYUtdg_pG5AbuHY9n-YYD_KdcSQPGPMyqd1QA-r32qgH6Bbi7Qg5Jb0ys6DwAwzgdkIKJMtbkhUrxImfoucF6HP9zUBH-7rtnf_KB_wlNJLj7Ba1PPbAHUMkUU-gi_cv8FnblxajrqPYp3jlAAF2cz9LEREiuLKqyFxpe2cHi2OjsQxXiqVPPMKT7pt10fEjrqpH_umSk9ZsbG-C3t4O_NKaGuH2m6lvXoo6LjNyth9JHhsg
+</code></pre>
+<p>Lastly, it fills other information that is related to the token, which includes the type and lifespan of the token. The following shows an example of the access token response body.</p>
+<pre><code>{
+  access_token: 'eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJvVnFpV2ZDZzllTm5ubVM1LUhTMXduTWhkemo2OVpieTZXTW1mQ0VPQy1NIn0.eyJleHAiOjE2NzAzNDYxMjgsImlhdCI6MTY3MDM0NjA2OCwiYXV0aF90aW1lIjoxNjcwMzQ1NDYwLCJqdGkiOiJjMjhmMzI1Yy1iNmFmLTQ0NDEtOTcxMi1lNDQ5NmI2Mjk3YjIiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwODEvcmVhbG1zL21hc3RlciIsImF1ZCI6WyJtYXN0ZXItcmVhbG0iLCJhY2NvdW50Il0sInN1YiI6IjYzYzFhMTQzLTY1NGQtNGQwMC1iZjRmLWUwMzUwODk4MjI0OCIsInR5cCI6IkJlYXJlciIsImF6cCI6ImNvbXAtaW50ZXJuZXQtc2VjIiwic2Vzc2lvbl9zdGF0ZSI6Ijk2MWJkNTAzLTk1MTgtNGU4OS05MmFhLWRhMTM0MzgzZjY4MSIsImFjciI6IjAiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsiY3JlYXRlLXJlYWxtIiwiZGVmYXVsdC1yb2xlcy1tYXN0ZXIiLCJvZmZsaW5lX2FjY2VzcyIsImFkbWluIiwidW1hX2F1dGhvcml6YXRpb24iXX0sInJlc291cmNlX2FjY2VzcyI6eyJtYXN0ZXItcmVhbG0iOnsicm9sZXMiOlsidmlldy1yZWFsbSIsInZpZXctaWRlbnRpdHktcHJvdmlkZXJzIiwibWFuYWdlLWlkZW50aXR5LXByb3ZpZGVycyIsImltcGVyc29uYXRpb24iLCJjcmVhdGUtY2xpZW50IiwibWFuYWdlLXVzZXJzIiwicXVlcnktcmVhbG1zIiwidmlldy1hdXRob3JpemF0aW9uIiwicXVlcnktY2xpZW50cyIsInF1ZXJ5LXVzZXJzIiwibWFuYWdlLWV2ZW50cyIsIm1hbmFnZS1yZWFsbSIsInZpZXctZXZlbnRzIiwidmlldy11c2VycyIsInZpZXctY2xpZW50cyIsIm1hbmFnZS1hdXRob3JpemF0aW9uIiwibWFuYWdlLWNsaWVudHMiLCJxdWVyeS1ncm91cHMiXX0sImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsInNpZCI6Ijk2MWJkNTAzLTk1MTgtNGU4OS05MmFhLWRhMTM0MzgzZjY4MSIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwicHJlZmVycmVkX3VzZXJuYW1lIjoiYWRtaW4ifQ.S-TwkLGhI5lAJVphW5yctXFYZ1S2dL0kOlYIQjymFLfm86wsFhxnPQrj7ELp5zKAzVSxJZ0HE4oK8hhxSLl9ssBQ8w44JwRa3t4tkDjYUtdg_pG5AbuHY9n-YYD_KdcSQPGPMyqd1QA-r32qgH6Bbi7Qg5Jb0ys6DwAwzgdkIKJMtbkhUrxImfoucF6HP9zUBH-7rtnf_KB_wlNJLj7Ba1PPbAHUMkUU-gi_cv8FnblxajrqPYp3jlAAF2cz9LEREiuLKqyFxpe2cHi2OjsQxXiqVPPMKT7pt10fEjrqpH_umSk9ZsbG-C3t4O_NKaGuH2m6lvXoo6LjNyth9JHhsg',
+  expires_in: 60,
+  refresh_expires_in: 1800,
+  refresh_token: 'eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICIwNGZmZWU1NS0yMzg1LTQ5OWItOGM3My0wYjA5YWI5MjQxYjUifQ.eyJleHAiOjE2NzAzNDc4NjgsImlhdCI6MTY3MDM0NjA2OCwianRpIjoiZjBiZWEyZTMtMDNjNS00NWE2LWEyMDQtYzFkZDBmYmJlMjgxIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo4MDgxL3JlYWxtcy9tYXN0ZXIiLCJhdWQiOiJodHRwOi8vbG9jYWxob3N0OjgwODEvcmVhbG1zL21hc3RlciIsInN1YiI6IjYzYzFhMTQzLTY1NGQtNGQwMC1iZjRmLWUwMzUwODk4MjI0OCIsInR5cCI6IlJlZnJlc2giLCJhenAiOiJjb21wLWludGVybmV0LXNlYyIsInNlc3Npb25fc3RhdGUiOiI5NjFiZDUwMy05NTE4LTRlODktOTJhYS1kYTEzNDM4M2Y2ODEiLCJzY29wZSI6InByb2ZpbGUgZW1haWwiLCJzaWQiOiI5NjFiZDUwMy05NTE4LTRlODktOTJhYS1kYTEzNDM4M2Y2ODEifQ.v3vyoimJ89nUtRVREk5qvu2skbcCZLG8_6PqHePYzgE',
+  token_type: 'Bearer',
+  'not-before-policy': 0,
+  session_state: '961bd503-9518-4e89-92aa-da134383f681',
+  scope: 'profile email'
+}
+</code></pre>
+
+        
+        
+    </body>
+    </html>
